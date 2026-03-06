@@ -1,0 +1,235 @@
+/* OpenCode Monitor TUI Stylesheet */
+
+/* === Layout === */
+
+#main-container {
+    height: 1fr;
+}
+
+#sidebar {
+    width: 24;
+    dock: left;
+    background: $surface;
+    border-right: tall $primary-background;
+}
+
+#sidebar-nav {
+    padding: 1 0;
+}
+
+#sidebar-title {
+    text-align: center;
+    text-style: bold;
+    color: $accent;
+    padding: 0 1 1 1;
+}
+
+.sidebar-group-label {
+    color: $text-muted;
+    text-style: bold;
+    padding: 1 1 0 1;
+}
+
+.sidebar-item {
+    padding: 0 1;
+    height: 1;
+    color: $text;
+}
+
+.sidebar-item:hover {
+    background: $boost;
+    color: $text;
+}
+
+.sidebar-item.active {
+    background: $accent 20%;
+    color: $accent;
+    text-style: bold;
+}
+
+#content-area {
+    width: 1fr;
+}
+
+#breadcrumb {
+    dock: top;
+    height: 1;
+    background: $surface;
+    color: $text-muted;
+    padding: 0 1;
+}
+
+#content-switcher {
+    height: 1fr;
+}
+
+/* === Filter Bar === */
+
+.filter-bar-row {
+    height: 3;
+    padding: 0 1;
+    align: left middle;
+}
+
+.filter-label {
+    padding: 0 1;
+    color: $text-muted;
+    width: auto;
+}
+
+.filter-select {
+    width: 20;
+    margin: 0 1;
+}
+
+.filter-input {
+    width: 20;
+    margin: 0 1;
+}
+
+/* === Data Tables === */
+
+DataTable {
+    height: 1fr;
+}
+
+DataTable > .datatable--header {
+    text-style: bold;
+    color: $accent;
+}
+
+DataTable > .datatable--cursor {
+    background: $accent 30%;
+    color: $text;
+}
+
+/* === Panels & Screens === */
+
+.screen-panel {
+    height: 1fr;
+    padding: 0;
+}
+
+.summary-bar {
+    height: 3;
+    padding: 0 1;
+    background: $surface;
+    dock: bottom;
+    color: $text-muted;
+}
+
+.detail-panel {
+    padding: 1;
+    height: 1fr;
+}
+
+.detail-panel DataTable {
+    height: auto;
+}
+
+.detail-section {
+    margin-bottom: 1;
+}
+
+.detail-section-title {
+    text-style: bold;
+    color: $accent;
+    margin-bottom: 1;
+}
+
+/* === Loading === */
+
+.loading-indicator {
+    text-align: center;
+    color: $text-muted;
+    padding: 2;
+}
+
+/* === Export Modal === */
+
+ExportModal {
+    align: center middle;
+}
+
+ExportModal > #export-dialog {
+    width: 50;
+    height: auto;
+    max-height: 20;
+    background: $surface;
+    border: thick $accent;
+    padding: 1 2;
+}
+
+ExportModal #export-dialog Label {
+    margin-bottom: 1;
+}
+
+ExportModal #export-buttons {
+    margin-top: 1;
+    height: 3;
+    align: right middle;
+}
+
+ExportModal Button {
+    margin-left: 1;
+}
+
+/* === Help Screen === */
+
+HelpScreen {
+    align: center middle;
+}
+
+HelpScreen > #help-dialog {
+    width: 60;
+    height: auto;
+    max-height: 30;
+    background: $surface;
+    border: thick $accent;
+    padding: 1 2;
+}
+
+/* === Live Dashboard === */
+
+.live-header {
+    height: 3;
+    padding: 0 1;
+    background: $surface;
+}
+
+.live-metrics {
+    height: 5;
+    padding: 0 1;
+}
+
+.metric-box {
+    width: 1fr;
+    height: 3;
+    padding: 0 1;
+    border: round $primary-background;
+    content-align: center middle;
+}
+
+.metric-box .metric-value {
+    text-style: bold;
+    color: $accent;
+}
+
+.metric-box .metric-label {
+    color: $text-muted;
+}
+
+/* === Workflow Picker === */
+
+WorkflowPickerModal {
+    align: center middle;
+}
+
+WorkflowPickerModal > #picker-dialog {
+    width: 70;
+    height: auto;
+    max-height: 25;
+    background: $surface;
+    border: thick $accent;
+    padding: 1 2;
+}

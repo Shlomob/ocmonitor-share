@@ -253,6 +253,30 @@ class TestLiveCommand:
         assert captured["kwargs"]["interactive_switch"] is True
 
 
+class TestTUILaunch:
+    """Tests for TUI launch behavior."""
+
+    def test_no_args_non_interactive_shows_help(self):
+        """CliRunner is not a TTY, so no-args invocation should show help."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [])
+        assert result.exit_code == 0
+        assert "Usage:" in result.output
+
+    def test_tui_subcommand_non_interactive(self):
+        """tui subcommand in non-interactive terminal should show help."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ['tui'])
+        assert result.exit_code == 0
+
+    def test_tui_help(self):
+        """tui --help should show usage."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ['tui', '--help'])
+        assert result.exit_code == 0
+        assert "Usage:" in result.output
+
+
 class TestCLIHelp:
     """Tests for CLI help functionality."""
     

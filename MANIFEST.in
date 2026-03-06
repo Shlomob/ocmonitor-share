@@ -1,2 +1,3 @@
 include ocmonitor/*.toml
 include ocmonitor/*.json
+include ocmonitor/tui/*.tcss

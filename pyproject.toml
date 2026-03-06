@@ -29,6 +29,7 @@ classifiers = [
 dependencies = [
     "click>=8.0.0",
     "rich>=13.0.0",
+    "textual>=0.50.0",
     "pydantic>=2.0.0",
     "toml>=0.10.0",
     "PyYAML>=6.0",
@@ -61,11 +62,11 @@ Homepage = "https://github.com/Shlomob/ocmonitor-share"
 Repository = "https://github.com/Shlomob/ocmonitor-share"
 
 [tool.setuptools]
-packages = ["ocmonitor", "ocmonitor.models", "ocmonitor.services", "ocmonitor.ui", "ocmonitor.utils"]
+packages = ["ocmonitor", "ocmonitor.models", "ocmonitor.services", "ocmonitor.ui", "ocmonitor.utils", "ocmonitor.tui", "ocmonitor.tui.widgets", "ocmonitor.tui.screens"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-ocmonitor = ["*.toml", "*.json"]
+ocmonitor = ["*.toml", "*.json", "tui/*.tcss"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

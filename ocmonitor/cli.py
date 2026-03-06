@@ -35,7 +35,7 @@ def json_serializer(obj):
         return str(obj)
 
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.version_option(version=__version__)
 @click.option(
     "--config", "-c", type=click.Path(exists=True), help="Path to configuration file"
@@ -53,6 +53,8 @@ def cli(ctx: click.Context, config: Optional[str], theme: Optional[str], verbose
 
     Monitor token usage, costs, and performance metrics from your OpenCode
     AI coding sessions with beautiful tables and real-time dashboards.
+
+    Run without a subcommand to launch the interactive TUI.
     """
     # Initialize context object
     ctx.ensure_object(dict)
@@ -66,14 +68,14 @@ def cli(ctx: click.Context, config: Optional[str], theme: Optional[str], verbose
             config_manager.reload()
 
         cfg = config_manager.config
-        
+
         # Override theme if provided via CLI
         if theme:
             cfg.ui.theme = theme
-        
+
         # Store no_remote flag in context for later use
         ctx.obj["no_remote"] = no_remote
-            
+
         ctx.obj["config"] = cfg
         ctx.obj["pricing_data"] = config_manager.load_pricing_data(no_remote=no_remote)
 
@@ -98,6 +100,44 @@ def cli(ctx: click.Context, config: Optional[str], theme: Optional[str], verbose
         if verbose:
             click.echo(f"Details: {str(e)}", err=True)
         ctx.exit(1)
+
+    # Launch TUI when no subcommand is given
+    if ctx.invoked_subcommand is None:
+        _launch_tui(ctx)
+
+
+def _launch_tui(ctx: click.Context) -> None:
+    """Launch the interactive TUI if in an interactive terminal."""
+    import sys
+
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        # Non-interactive: show help instead
+        click.echo(ctx.get_help())
+        return
+
+    try:
+        from .tui.app import OCMonitorApp
+
+        app = OCMonitorApp(
+            config=ctx.obj["config"],
+            pricing_data=ctx.obj["pricing_data"],
+            no_remote=ctx.obj.get("no_remote", False),
+        )
+        app.run()
+    except ImportError:
+        click.echo(
+            "TUI requires the 'textual' package. Install it with:\n"
+            "  pip install 'textual>=0.50.0'",
+            err=True,
+        )
+        ctx.exit(1)
+
+
+@cli.command()
+@click.pass_context
+def tui(ctx: click.Context):
+    """Launch the interactive TUI dashboard."""
+    _launch_tui(ctx)
 
 
 @cli.command()

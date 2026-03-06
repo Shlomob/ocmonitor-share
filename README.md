@@ -123,6 +123,16 @@ If your host OpenCode data is not in `~/.local/share/opencode`, set `OPENCODE_DA
 OPENCODE_DATA_DIR=/your/path/to/opencode/data/dir docker compose run --rm ocmonitor sessions
 ```
 
+### Interactive TUI
+
+Running `ocmonitor` with no arguments launches an interactive TUI dashboard
+(requires an interactive terminal):
+
+```bash
+ocmonitor        # launches TUI
+ocmonitor tui    # explicit TUI launch
+```
+
 ### Basic Usage
 
 ```bash
@@ -144,6 +154,8 @@ ocmonitor model claude-sonnet-4-5
 
 | Command | Description |
 |---|---|
+| `ocmonitor` | Launch interactive TUI dashboard |
+| `ocmonitor tui` | Launch interactive TUI dashboard (explicit) |
 | `ocmonitor live` | Real-time monitoring dashboard |
 | `ocmonitor sessions` | All sessions summary with workflow grouping |
 | `ocmonitor session <path>` | Single session detail |

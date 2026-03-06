@@ -26,11 +26,12 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     package_data={
-        "ocmonitor": ["*.toml", "*.json"],
+        "ocmonitor": ["*.toml", "*.json", "tui/*.tcss"],
     },
     install_requires=[
         "click>=8.0.0",
         "rich>=13.0.0",
+        "textual>=0.50.0",
         "pydantic>=2.0.0",
         "toml>=0.10.0",
     ],
