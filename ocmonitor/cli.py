@@ -2,7 +2,7 @@
 
 import json
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Optional
@@ -163,8 +163,14 @@ _REPORT_METHOD_MAP = {
 @click.option(
     "--no-remote", is_flag=True, help="Disable remote pricing fallback (local-only mode)"
 )
+@click.option(
+    "--color",
+    type=click.Choice(["always", "auto", "never"]),
+    default="auto",
+    help="Force color output: always, auto (default), or never",
+)
 @click.pass_context
-def cli(ctx: click.Context, config: Optional[str], theme: Optional[str], verbose: bool, no_remote: bool):
+def cli( ctx: click.Context, config: Optional[str], theme: Optional[str], verbose: bool, no_remote: bool, color: str):
     """OpenCode Monitor - Analytics and monitoring for OpenCode sessions.
 
     Monitor token usage, costs, and performance metrics from your OpenCode
@@ -197,6 +203,14 @@ def cli(ctx: click.Context, config: Optional[str], theme: Optional[str], verbose
         theme_name = cfg.ui.theme
         theme_obj = get_theme(theme_name)
         console = Console(theme=theme_obj)
+
+        # Apply --color setting
+        if color == "always":
+            console._color_system = "true"
+        elif color == "never":
+            console._color_system = None
+        # "auto" keeps the default TTY detection
+
         ctx.obj["console"] = console
 
         # Initialize services
@@ -267,7 +281,10 @@ def session(ctx: click.Context, path: Optional[str], output_format: str):
     "--source", "-s",
     type=click.Choice(["auto", "sqlite", "files"]),
     default="auto",
-    help="Data source: auto (prefer SQLite), sqlite (v1.2.0+), or files (legacy)"
+    help="Data source: auto (prefer SQLite), sqlite (v1.2.0+), or files (legacy)",
+)
+@click.option(
+    "--days", "-d", type=int, default=None, help="Filter sessions from the last N days"
 )
 @click.pass_context
 def sessions(
@@ -277,6 +294,7 @@ def sessions(
     limit: Optional[int],
     no_group: bool,
     source: str,
+    days: Optional[int],
 ):
     """Analyze all OpenCode sessions.
 
@@ -297,20 +315,55 @@ def sessions(
         source_info = analyzer.get_data_source_info()
         console.print(f"[status.info]Using data source: {source_info['last_used'] or 'auto-detect'}[/status.info]")
 
-        if limit:
-            sessions_list = analyzer.analyze_all_sessions(path, limit)
-            console.print(f"[status.info]Analyzing {len(sessions_list)} most recent sessions...[/status.info]")
-        else:
-            sessions_list = analyzer.analyze_all_sessions(path)
-            console.print(f"[status.info]Analyzing {len(sessions_list)} sessions...[/status.info]")
+        # Load all sessions first (without limit)
+        sessions_list = analyzer.analyze_all_sessions(path)
+        console.print(
+            f"[status.info]Analyzing {len(sessions_list)} sessions...[/status.info]"
+        )
 
         if not sessions_list:
             console.print("[status.error]No sessions found in the specified directory.[/status.error]")
             ctx.exit(1)
 
-        result = report_generator.generate_sessions_summary_report(
-            path, limit, output_format, group_workflows=not no_group
-        )
+        # Apply date filtering if --days is specified
+        if days is not None:
+            end_date = date.today()
+            start_date = end_date - timedelta(days=days - 1)
+            sessions_list = analyzer.filter_sessions_by_date(
+                sessions_list, start_date, end_date
+            )
+            console.print(
+                f"[status.info]Filtering to {len(sessions_list)} sessions from the last {days} day(s)...[/status.info]"
+            )
+
+        # Apply limit after date filtering
+        if limit is not None:
+            sessions_list = sessions_list[:limit]
+            console.print(
+                f"[status.info]Limited to {len(sessions_list)} most recent sessions[/status.info]"
+            )
+
+        # Generate summary and display report using filtered sessions
+        summary = analyzer.get_sessions_summary(sessions_list)
+        result = {
+            "type": "sessions_summary",
+            "sessions": sessions_list,
+            "summary": summary,
+        }
+
+        if output_format == "table":
+            if not no_group:
+                report_generator._display_workflow_sessions_table(
+                    sessions_list, summary
+                )
+            else:
+                report_generator._display_sessions_summary_table(sessions_list, summary)
+        elif output_format == "json":
+            result = report_generator._format_sessions_summary_json(
+                sessions_list, summary
+            )
+        elif output_format == "csv":
+            result = report_generator._format_sessions_summary_csv(sessions_list)
 
         handle_output_format(result, output_format)
 
@@ -418,7 +471,6 @@ def _display_validation_results(console, validation: dict, ctx) -> bool:
 @click.option(
     "--interval", "-i", type=int, default=None, help="Update interval in seconds"
 )
-@click.option("--no-color", is_flag=True, help="Disable colored output")
 @click.option(
     "--pick",
     is_flag=True,
@@ -445,7 +497,6 @@ def live(
     ctx: click.Context,
     path: Optional[str],
     interval: Optional[int],
-    no_color: bool,
     pick: bool,
     session_id: Optional[str],
     interactive_switch: bool,
@@ -464,10 +515,6 @@ def live(
 
     if interval is None:
         interval = config.ui.live_refresh_interval
-
-    # Disable colors if requested
-    if no_color:
-        console._color_system = None
 
     try:
         live_monitor = ctx.obj["live_monitor"]
