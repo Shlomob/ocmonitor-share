@@ -238,9 +238,32 @@ class SessionAnalyzer:
 
         filtered = []
         for session in sessions:
-            if session.start_time:
-                session_date = session.start_time.date()
-                if TimeUtils.date_in_range(session_date, start_date, end_date):
+            # Check if session has any activity in the date range
+            session_start_date = (
+                session.start_time.date() if session.start_time else None
+            )
+            session_end_date = (
+                session.end_time.date() if session.end_time else session_start_date
+            )
+
+            if session_start_date:
+                # Include if: started in range OR ended in range OR spans the range
+                in_range = False
+
+                # Check if start date is in range
+                if TimeUtils.date_in_range(session_start_date, start_date, end_date):
+                    in_range = True
+                # Check if end date is in range
+                elif session_end_date and TimeUtils.date_in_range(
+                    session_end_date, start_date, end_date
+                ):
+                    in_range = True
+                # Check if session spans the range (started before, ended after)
+                elif session_end_date and start_date and end_date:
+                    if session_start_date < start_date and session_end_date > end_date:
+                        in_range = True
+
+                if in_range:
                     filtered.append(session)
 
         return filtered
