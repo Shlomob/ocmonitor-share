@@ -110,6 +110,23 @@ def extract_workflow_metrics(
         "session_count": workflow.session_count,
         "sub_agent_count": workflow.sub_agent_count,
     }
+
+    # Context usage from most recent interaction
+    all_files = []
+    for session in workflow.all_sessions:
+        all_files.extend(session.non_zero_token_files)
+    if all_files:
+        recent = max(all_files, key=lambda f: (f.time_data.created if f.time_data and f.time_data.created else 0))
+        context_size = recent.tokens.input + recent.tokens.cache_read + recent.tokens.cache_write
+        metrics["context_size"] = context_size
+        context_window = getattr(recent, 'context_window', None)
+        if context_window:
+            metrics["context_window"] = context_window
+        # Burn rate (output tokens per second from most recent interaction)
+        if recent.time_data and recent.time_data.created and recent.time_data.completed:
+            duration_ms = recent.time_data.completed - recent.time_data.created
+            if duration_ms > 0:
+                metrics["burn_rate"] = round(recent.tokens.output / (duration_ms / 1000.0), 1)
     # Cost
     try:
         cost = workflow.calculate_total_cost(pricing_data)
