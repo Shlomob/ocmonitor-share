@@ -51,7 +51,7 @@ class UIConfig(BaseModel):
     theme: str = Field(default="dark", pattern="^(light|dark)$")
     progress_bars: bool = Field(default=True)
     colors: bool = Field(default=True)
-    live_refresh_interval: int = Field(default=5, ge=1, le=60)
+    live_refresh_interval: int = Field(default=1, ge=1, le=60)
 
 
 class ExportConfig(BaseModel):

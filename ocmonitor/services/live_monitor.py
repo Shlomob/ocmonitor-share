@@ -1,7 +1,9 @@
 """Live monitoring service for OpenCode Monitor."""
 
 import os
+import platform
 import select
+import signal
 import sys
 import time
 from datetime import datetime, timedelta
@@ -19,6 +21,7 @@ from ..config import ModelPricing, PathsConfig
 from ..models.session import InteractionFile, SessionData, TokenUsage
 from ..models.tool_usage import ModelToolUsage, ToolUsageStats
 from ..models.workflow import SessionWorkflow
+from ..ui.change_tracker import ValueChangeTracker, extract_workflow_metrics
 from ..ui.dashboard import DashboardUI
 from ..ui.tables import TableFormatter
 from ..utils.data_loader import DataLoader
@@ -118,16 +121,19 @@ class LiveMonitor:
         self.console = console or Console()
         self.paths_config = paths_config
         self.currency_converter = currency_converter
-        self.dashboard_ui = DashboardUI(console, currency_converter)
+        self.dashboard_ui = DashboardUI(self.console, currency_converter)
         self.session_grouper = SessionGrouper()
         self.data_loader = DataLoader()
         self._active_workflows: Dict[str, Any] = {}
         self._displayed_workflow_id: Optional[str] = None
         self.prev_tracked: set = set()
+        self._change_tracker = ValueChangeTracker()
         self._stdin_fd: Optional[int] = None
         self._stdin_termios_state: Optional[Any] = None
         self._input_buffer: str = ""
         self._live_status_line: Optional[str] = None
+        self._original_sigwinch: Any = None
+        self._resize_pending: bool = False
         if init_from_db:
             self._initialize_active_workflows()
 
@@ -147,6 +153,37 @@ class LiveMonitor:
                 self.prev_tracked = set(
                     s.session_id for s in most_recent["all_sessions"]
                 )
+
+    def _setup_resize_handler(self, live: Live) -> None:
+        """Register SIGWINCH handler to trigger resize on terminal size change."""
+        if platform.system() == "Windows":
+            return  # Windows doesn't have SIGWINCH
+        try:
+            self._original_sigwinch = signal.getsignal(signal.SIGWINCH)
+
+            def _on_resize(signum: int, frame: Any) -> None:
+                self._resize_pending = True  # async-signal-safe: only set flag
+
+            signal.signal(signal.SIGWINCH, _on_resize)
+        except (ValueError, OSError):
+            pass  # Signal not available in this context (e.g., piped)
+
+    def _teardown_resize_handler(self) -> None:
+        """Restore original SIGWINCH handler."""
+        if platform.system() == "Windows":
+            return
+        if self._original_sigwinch is not None:
+            try:
+                signal.signal(signal.SIGWINCH, self._original_sigwinch)
+            except (ValueError, OSError):
+                pass
+        self._resize_pending = False
+
+    def _check_and_handle_resize(self, live: Live) -> None:
+        """Check resize flag and trigger refresh if needed."""
+        if self._resize_pending:
+            self._resize_pending = False
+            live.refresh()
 
     def _get_tracked_workflow_ids(self) -> Set[str]:
         """Return set of tracked workflow IDs (for testing)."""
@@ -704,11 +741,13 @@ class LiveMonitor:
         current_workflow = immediate_current
         self.prev_tracked |= set(s.session_id for s in current_workflow.all_sessions)
 
+        current_time = datetime.now()
         live.update(
             self._generate_workflow_dashboard(
-                current_workflow, self._controls_hint(interactive_switch)
+                current_workflow, self._controls_hint(interactive_switch), current_time
             )
         )
+        live.refresh()
 
         return current_workflow_id, current_workflow, selected_session_id
 
@@ -806,7 +845,7 @@ class LiveMonitor:
     def start_monitoring(
         self,
         base_path: str,
-        refresh_interval: int = 5,
+        refresh_interval: int = 1,
         selected_session_id: Optional[str] = None,
         interactive_switch: bool = False,
     ):
@@ -888,9 +927,10 @@ class LiveMonitor:
                 self._generate_workflow_dashboard(
                     current_workflow, self._controls_hint(interactive_switch)
                 ),
-                refresh_per_second=10,
+                auto_refresh=False,
                 console=self.console,
             ) as live:
+                self._setup_resize_handler(live)
                 descriptors = self._describe_file_workflows(active_workflows)
                 next_refresh_at = time.time() + refresh_interval
                 while True:
@@ -915,6 +955,7 @@ class LiveMonitor:
                                 )
                                 if current_workflow_id != prev_workflow_id:
                                     next_refresh_at = time.time() + refresh_interval
+                                    self._change_tracker.reset()
                                 continue
 
                             (
@@ -935,6 +976,7 @@ class LiveMonitor:
                             )
                             if current_workflow_id != prev_workflow_id:
                                 next_refresh_at = time.time() + refresh_interval
+                                self._change_tracker.reset()
                             if should_quit:
                                 self.console.print(
                                     "\n[status.warning]Live monitoring stopped.[/status.warning]"
@@ -942,6 +984,7 @@ class LiveMonitor:
                                 break
 
                     if time.time() < next_refresh_at:
+                        self._check_and_handle_resize(live)
                         time.sleep(0.05)
                         continue
 
@@ -973,17 +1016,23 @@ class LiveMonitor:
                     if new_current.workflow_id != current_workflow_id:
                         current_workflow_id = new_current.workflow_id
                         self.prev_tracked = set()
+                        self._change_tracker.reset()
                     current_workflow = new_current
 
                     self.prev_tracked |= set(
                         s.session_id for s in current_workflow.all_sessions
                     )
 
+                    current_time = datetime.now()
+                    metrics = extract_workflow_metrics(current_workflow, self.pricing_data, current_time)
+                    changed_fields = self._change_tracker.update_and_diff(metrics)
                     live.update(
                         self._generate_workflow_dashboard(
-                            current_workflow, self._controls_hint(interactive_switch)
+                            current_workflow, self._controls_hint(interactive_switch), current_time,
+                            changed_fields=changed_fields
                         )
                     )
+                    live.refresh()
                     next_refresh_at = time.time() + refresh_interval
 
         except KeyboardInterrupt:
@@ -991,17 +1040,24 @@ class LiveMonitor:
                 "\n[status.warning]Live monitoring stopped.[/status.warning]"
             )
         finally:
+            self._teardown_resize_handler()
             self._disable_raw_input_mode()
 
-    def _generate_dashboard(self, session: SessionData):
+    def _generate_dashboard(
+        self, session: SessionData, current_time: Optional[datetime] = None,
+        changed_fields: Optional[Set[str]] = None,
+    ):
         """Generate dashboard layout for the session.
 
         Args:
             session: Session to monitor
+            current_time: Optional datetime for timestamp (default: datetime.now())
 
         Returns:
             Rich layout for the dashboard
         """
+        if current_time is None:
+            current_time = datetime.now()
         # Get the most recent file (excluding zero-token files)
         recent_file = None
         if session.non_zero_token_files:
@@ -1027,6 +1083,8 @@ class LiveMonitor:
             quota=quota,
             per_model_output_rates=per_model_output_rates,
             per_model_context=per_model_context,
+            current_time=current_time,
+            changed_fields=changed_fields,
         )
 
     def _calculate_session_output_rates(self, session: SessionData) -> Dict[str, float]:
@@ -1106,16 +1164,24 @@ class LiveMonitor:
         return result
 
     def _generate_workflow_dashboard(
-        self, workflow: SessionWorkflow, controls_hint: Optional[str] = None
+        self,
+        workflow: SessionWorkflow,
+        controls_hint: Optional[str] = None,
+        current_time: Optional[datetime] = None,
+        changed_fields: Optional[Set[str]] = None,
     ):
         """Generate dashboard layout for a workflow (main + sub-agents).
 
         Args:
             workflow: Workflow to monitor
+            controls_hint: Optional hint for controls display
+            current_time: Optional datetime for timestamp (default: datetime.now())
 
         Returns:
             Rich layout for the dashboard
         """
+        if current_time is None:
+            current_time = datetime.now()
         # Get all files from all sessions in the workflow
         all_files: List[InteractionFile] = []
         for session in workflow.all_sessions:
@@ -1158,6 +1224,8 @@ class LiveMonitor:
             tool_stats=tool_stats,
             tool_stats_by_model=tool_stats_by_model,
             controls_hint=controls_hint,
+            current_time=current_time,
+            changed_fields=changed_fields,
         )
 
     def _calculate_per_model_output_rates(
@@ -1460,7 +1528,7 @@ class LiveMonitor:
 
     def start_sqlite_workflow_monitoring(
         self,
-        refresh_interval: int = 5,
+        refresh_interval: int = 1,
         selected_session_id: Optional[str] = None,
         interactive_switch: bool = False,
     ):
@@ -1551,9 +1619,10 @@ class LiveMonitor:
                 self._generate_sqlite_workflow_dashboard(
                     current_workflow, self._controls_hint(interactive_switch)
                 ),
-                refresh_per_second=10,
+                auto_refresh=False,
                 console=self.console,
             ) as live:
+                self._setup_resize_handler(live)
                 descriptors = self._describe_sqlite_workflows(active_workflows)
                 next_refresh_at = time.time() + refresh_interval
                 while True:
@@ -1577,6 +1646,7 @@ class LiveMonitor:
                                     )
                                     if switched and selected_session_id:
                                         self.prev_tracked = set()
+                                        self._change_tracker.reset()
                                         self._live_status_line = f"Switched to workflow {selected_session_id}."
                                         self.console.print(
                                             f"[status.info]Switched to workflow [metric.value]{selected_session_id}[/metric.value][/status.info]"
@@ -1595,6 +1665,7 @@ class LiveMonitor:
                                                     "workflow_id"
                                                 ]
                                                 self.prev_tracked = set()
+                                                self._change_tracker.reset()
                                             current_workflow = immediate_current
                                             self.prev_tracked |= set(
                                                 s.session_id
@@ -1602,14 +1673,17 @@ class LiveMonitor:
                                                     "all_sessions"
                                                 ]
                                             )
+                                            current_time = datetime.now()
                                             live.update(
                                                 self._generate_sqlite_workflow_dashboard(
                                                     current_workflow,
                                                     self._controls_hint(
                                                         interactive_switch
                                                     ),
+                                                    current_time,
                                                 )
                                             )
+                                            live.refresh()
                                             next_refresh_at = (
                                                 time.time() + refresh_interval
                                             )
@@ -1632,6 +1706,7 @@ class LiveMonitor:
                             )
                             if switched and selected_session_id:
                                 self.prev_tracked = set()
+                                self._change_tracker.reset()
                                 self._live_status_line = (
                                     f"Switched to workflow {selected_session_id}."
                                 )
@@ -1652,20 +1727,25 @@ class LiveMonitor:
                                             "workflow_id"
                                         ]
                                         self.prev_tracked = set()
+                                        self._change_tracker.reset()
                                     current_workflow = immediate_current
                                     self.prev_tracked |= set(
                                         s.session_id
                                         for s in current_workflow["all_sessions"]
                                     )
+                                    current_time = datetime.now()
                                     live.update(
                                         self._generate_sqlite_workflow_dashboard(
                                             current_workflow,
                                             self._controls_hint(interactive_switch),
+                                            current_time,
                                         )
                                     )
+                                    live.refresh()
                                     next_refresh_at = time.time() + refresh_interval
 
                     if time.time() < next_refresh_at:
+                        self._check_and_handle_resize(live)
                         time.sleep(0.05)
                         continue
 
@@ -1697,16 +1777,23 @@ class LiveMonitor:
                     if new_current["workflow_id"] != current_workflow_id:
                         current_workflow_id = new_current["workflow_id"]
                         self.prev_tracked = set()
+                        self._change_tracker.reset()
                     current_workflow = new_current
                     self.prev_tracked |= set(
                         s.session_id for s in current_workflow["all_sessions"]
                     )
 
+                    current_time = datetime.now()
+                    wrapped = WorkflowWrapper(current_workflow, self.pricing_data)
+                    metrics = extract_workflow_metrics(wrapped, self.pricing_data, current_time)
+                    changed_fields = self._change_tracker.update_and_diff(metrics)
                     live.update(
                         self._generate_sqlite_workflow_dashboard(
-                            current_workflow, self._controls_hint(interactive_switch)
+                            current_workflow, self._controls_hint(interactive_switch), current_time,
+                            changed_fields=changed_fields
                         )
                     )
+                    live.refresh()
                     next_refresh_at = time.time() + refresh_interval
 
         except KeyboardInterrupt:
@@ -1714,6 +1801,7 @@ class LiveMonitor:
                 "\n[status.warning]Live monitoring stopped.[/status.warning]"
             )
         finally:
+            self._teardown_resize_handler()
             self._disable_raw_input_mode()
 
     def _select_most_recent_workflow(
@@ -1781,16 +1869,24 @@ class LiveMonitor:
         return max(workflows, key=get_latest_parent_activity)
 
     def _generate_sqlite_workflow_dashboard(
-        self, workflow: Dict[str, Any], controls_hint: Optional[str] = None
+        self,
+        workflow: Dict[str, Any],
+        controls_hint: Optional[str] = None,
+        current_time: Optional[datetime] = None,
+        changed_fields: Optional[Set[str]] = None,
     ):
         """Generate dashboard layout for a SQLite workflow (main + sub-agents).
 
         Args:
             workflow: Workflow dict from SQLiteProcessor.get_most_recent_workflow()
+            controls_hint: Optional hint for controls display
+            current_time: Optional datetime for timestamp (default: datetime.now())
 
         Returns:
             Rich layout for the dashboard
         """
+        if current_time is None:
+            current_time = datetime.now()
         # Get all files from all sessions in the workflow
         all_files = []
         for session in workflow["all_sessions"]:
@@ -1842,6 +1938,8 @@ class LiveMonitor:
             tool_stats=tool_stats,
             tool_stats_by_model=tool_stats_by_model,
             controls_hint=controls_hint,
+            current_time=current_time,
+            changed_fields=changed_fields,
         )
 
     def _calculate_sqlite_per_model_output_rates(

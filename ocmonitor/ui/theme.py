@@ -20,6 +20,11 @@ DARK_THEME_STYLES = {
     "metric.tokens": "bold cyan",
     "metric.cost": "bold white",
     
+    # Flash highlight for real-time value changes
+    "metric.flash": "bold yellow",           # 通用数值变化 - 黄色醒目
+    "metric.flash.cost": "bold bright_green", # 成本变化 - 绿色醒目
+    "metric.flash.tokens": "bold bright_green", # Token 变化 - 绿色醒目
+    
     # Status and Indicators
     "status.success": "green",
     "status.warning": "yellow",
@@ -58,6 +63,11 @@ LIGHT_THEME_STYLES = {
     "metric.important": "bold blue",
     "metric.tokens": "bold blue",
     "metric.cost": "bold black",
+    
+    # Flash highlight for real-time value changes
+    "metric.flash": "bold dark_orange",      # 通用数值变化 - 橙色醒目
+    "metric.flash.cost": "bold dark_green",  # 成本变化
+    "metric.flash.tokens": "bold dark_green", # Token 变化
     
     # Status and Indicators
     "status.success": "dark_green",

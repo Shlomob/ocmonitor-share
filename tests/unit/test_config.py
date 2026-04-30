@@ -87,7 +87,7 @@ class TestUIConfig:
         assert config.table_style == "rich"
         assert config.progress_bars is True
         assert config.colors is True
-        assert config.live_refresh_interval == 5
+        assert config.live_refresh_interval == 1
     
     def test_valid_table_styles(self):
         """Test that valid table styles are accepted."""
