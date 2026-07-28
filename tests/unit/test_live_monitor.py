@@ -14,14 +14,30 @@ class TestLiveMonitorDisplayMode:
         live_instances = []
 
         class FakeLive:
+            """A minimal context manager used to mimic Rich Live in tests.
+
+            Instances are appended to the outer `live_instances` list and
+            construction kwargs are captured for assertions.
+            """
             def __init__(self, *args, **kwargs):
+                """Initialize the fake live instance and record the kwargs.
+
+                The instance is appended to the enclosing `live_instances` list
+                so tests can assert how the Live context was constructed.
+                """
                 self.kwargs = kwargs
                 live_instances.append(self)
 
             def __enter__(self):
+                """Enter the context manager and return this instance."""
                 return self
 
             def __exit__(self, exc_type, exc_value, traceback):
+                """Exit the context manager and do not suppress exceptions.
+
+                Returning False ensures any exception (e.g., KeyboardInterrupt)
+                propagates to the test.
+                """
                 return False
 
         monkeypatch.setattr("ocmonitor.services.live_monitor.Live", FakeLive)
@@ -30,6 +46,11 @@ class TestLiveMonitorDisplayMode:
     def test_file_monitor_uses_full_screen_by_default_and_inline_when_requested(
         self, monkeypatch, tmp_path
     ):
+        """Verify file-based LiveMonitor uses full-screen by default and inline when requested.
+
+        The test asserts that the Live context is created with `screen=True` for the
+        default call and `screen=False` when invoked with `inline=True`.
+        """
         workflow = SimpleNamespace(
             workflow_id="file-workflow",
             main_session=SimpleNamespace(session_id="file-session", files=[]),
@@ -66,6 +87,11 @@ class TestLiveMonitorDisplayMode:
     def test_sqlite_monitor_uses_full_screen_by_default_and_inline_when_requested(
         self, monkeypatch, tmp_path
     ):
+        """Verify SQLite-based LiveMonitor uses full-screen by default and inline when requested.
+
+        The test asserts that the Live context is created with `screen=True` for the
+        default call and `screen=False` when invoked with `inline=True`.
+        """
         workflow = {
             "workflow_id": "sqlite-workflow",
             "main_session": SimpleNamespace(

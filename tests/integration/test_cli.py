@@ -623,6 +623,11 @@ class TestLiveCommand:
         captured = {}
 
         def fake_start_monitoring(self, *args, **kwargs):
+            """A fake start_monitoring replacement used to capture call args.
+
+            This test-local stub records positional and keyword arguments so the
+            test can assert that the CLI forwarded the `--inline` flag correctly.
+            """
             captured["args"] = args
             captured["kwargs"] = kwargs
 
