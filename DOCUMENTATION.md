@@ -486,14 +486,19 @@ ocmonitor projects ~/.local/share/opencode/storage/message --format csv
 ### 4. Live Monitoring Commands
 
 #### `ocmonitor live <path>`
-Real-time monitoring dashboard that updates automatically.
+Real-time monitoring dashboard that updates automatically. By default, it uses a
+full-screen display and restores the terminal prompt when you exit. Use `--inline`
+to keep dashboard output in the normal terminal buffer.
 
 ```bash
-# Start live monitoring (updates every 5 seconds)
+# Start live monitoring (updates every 3 seconds by default)
 ocmonitor live ~/.local/share/opencode/storage/message
 
 # Custom refresh interval (in seconds)
-ocmonitor live ~/.local/share/opencode/storage/message --refresh 10
+ocmonitor live ~/.local/share/opencode/storage/message --interval 10
+
+# Keep dashboard output in the normal terminal buffer
+ocmonitor live ~/.local/share/opencode/storage/message --inline
 ```
 
 **Features:**

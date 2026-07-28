@@ -482,9 +482,18 @@ def _display_validation_results(console, validation: dict, ctx) -> bool:
 @cli.command()
 @click.argument("path", type=click.Path(exists=True), required=False)
 @click.option(
-    "--interval", "-i", type=int, default=None, help="Update interval in seconds"
+    "--interval",
+    "-i",
+    type=click.IntRange(min=1),
+    default=None,
+    help="Update interval in seconds (minimum: 1)",
 )
 @click.option("--no-color", is_flag=True, help="Disable colored output")
+@click.option(
+    "--inline",
+    is_flag=True,
+    help="Use normal terminal-buffer output instead of the default full-screen display",
+)
 @click.option(
     "--pick",
     is_flag=True,
@@ -512,6 +521,7 @@ def live(
     path: Optional[str],
     interval: Optional[int],
     no_color: bool,
+    inline: bool,
     pick: bool,
     session_id: Optional[str],
     interactive_switch: bool,
@@ -578,6 +588,7 @@ def live(
                 interval,
                 selected_session_id=selected_session_id,
                 interactive_switch=interactive_switch,
+                inline=inline,
             )
         elif mode == "files":
             if not path:
@@ -590,6 +601,7 @@ def live(
                 interval,
                 selected_session_id=selected_session_id,
                 interactive_switch=interactive_switch,
+                inline=inline,
             )
 
     except KeyboardInterrupt:

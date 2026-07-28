@@ -252,7 +252,9 @@ Supported days: `monday`, `tuesday`, `wednesday`, `thursday`, `friday`, `saturda
 
 #### `ocmonitor live <path>`
 
-Real-time monitoring dashboard that updates automatically.
+Real-time monitoring dashboard that updates automatically. By default, it uses a
+full-screen display and restores the terminal prompt when you exit. Use `--inline`
+to keep dashboard output in the normal terminal buffer.
 
 ```bash
 # Start live monitoring (updates every 3 seconds by default)
@@ -260,6 +262,9 @@ ocmonitor live
 
 # Custom update interval (in seconds)
 ocmonitor live --interval 10
+
+# Keep dashboard output in the normal terminal buffer
+ocmonitor live --inline
 
 # Pick a workflow by readable title before launching
 # (also enables interactive switching controls by default)

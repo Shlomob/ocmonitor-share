@@ -584,6 +584,76 @@ class TestSessionCommand:
 class TestLiveCommand:
     """Tests for live command selection and precedence."""
 
+    def test_live_help_describes_inline_as_the_normal_buffer_fallback(self):
+        """Help must distinguish inline output from the default full-screen view."""
+        runner = CliRunner()
+
+        result = runner.invoke(cli, ["live", "--help"])
+
+        assert result.exit_code == 0
+        normalized_help = " ".join(result.output.split())
+        assert "normal terminal-buffer output" in normalized_help
+        assert "default full-screen display" in normalized_help
+
+    @pytest.mark.parametrize("interval", ["0", "-1"])
+    def test_live_rejects_nonpositive_update_intervals(self, interval):
+        """The monitor must not accept intervals that cause a busy polling loop."""
+        runner = CliRunner()
+
+        result = runner.invoke(cli, ["live", "--interval", interval])
+
+        assert result.exit_code == 2
+        assert "not in the range" in result.output
+        assert ">=1" in result.output
+
+    @pytest.mark.parametrize(
+        ("source", "method_name", "inline"),
+        [
+            ("files", "start_monitoring", False),
+            ("files", "start_monitoring", True),
+            ("sqlite", "start_sqlite_workflow_monitoring", False),
+            ("sqlite", "start_sqlite_workflow_monitoring", True),
+        ],
+    )
+    def test_live_forwards_inline_mode_for_each_source(
+        self, mock_sessions_dir, source, method_name, inline
+    ):
+        """The CLI forwards full-screen default and inline fallback to each monitor."""
+        runner = CliRunner()
+        captured = {}
+
+        def fake_start_monitoring(self, *args, **kwargs):
+            captured["args"] = args
+            captured["kwargs"] = kwargs
+
+        validation = {
+            "valid": True,
+            "issues": [],
+            "warnings": [],
+            "info": {
+                "sqlite": {"available": source == "sqlite"},
+                "files": {"available": source == "files"},
+            },
+        }
+        command = ["live"]
+        if source == "files":
+            command.append(str(mock_sessions_dir))
+        command.extend(["--source", source])
+        if inline:
+            command.append("--inline")
+
+        with patch(
+            "ocmonitor.services.live_monitor.LiveMonitor.validate_monitoring_setup",
+            return_value=validation,
+        ), patch(
+            f"ocmonitor.services.live_monitor.LiveMonitor.{method_name}",
+            new=fake_start_monitoring,
+        ):
+            result = runner.invoke(cli, command)
+
+        assert result.exit_code == 0
+        assert captured["kwargs"]["inline"] is inline
+
     def test_live_with_pick_uses_picker_selection(self, mock_sessions_dir):
         runner = CliRunner()
         captured = {}
