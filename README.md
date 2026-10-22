@@ -65,7 +65,7 @@ pip install "opencode-monitor[charts,export]"
 **Option 2: uvx (Run without installing)**
 
 ```bash
-uvx opencode-monitor live
+uvx --from opencode-monitor ocmonitor live
 ```
 
 **Option 3: uv tool install**
