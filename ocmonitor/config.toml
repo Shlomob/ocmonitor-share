@@ -16,7 +16,7 @@ progress_bars = true
 # Enable colors in output
 colors = true
 # Refresh interval for live dashboard (seconds)
-live_refresh_interval = 3
+live_refresh_interval = 1
 
 [export]
 # Default export format: "csv", "json"

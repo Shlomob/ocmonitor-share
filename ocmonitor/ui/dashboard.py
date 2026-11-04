@@ -3,7 +3,7 @@
 import os
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from rich.console import Console
 from rich.layout import Layout
@@ -37,14 +37,39 @@ class DashboardUI:
             return self.currency_converter.format(amount)
         return f"${amount:.2f}"
 
+    def _flash_style(
+        self,
+        field_name: str,
+        changed_fields: Optional[Set[str]],
+        base_style: str,
+        flash_style: str,
+    ) -> str:
+        """Return flash style if field changed, else base style.
+
+        Args:
+            field_name: Semantic field name (e.g., "tokens.input", "cost.total")
+            changed_fields: Set of changed field names from ValueChangeTracker
+            base_style: Normal Rich theme style (e.g., "metric.tokens")
+            flash_style: Highlight Rich theme style (e.g., "metric.flash.tokens")
+
+        Returns:
+            The appropriate style string
+        """
+        if changed_fields and field_name in changed_fields:
+            return flash_style
+        return base_style
+
     def create_header(
         self,
         session: SessionData,
         workflow: Optional[SessionWorkflow] = None,
         controls_hint: Optional[str] = None,
+        current_time: Optional[datetime] = None,
     ) -> Panel:
         """Create header panel with session info."""
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if current_time is None:
+            current_time = datetime.now()
+        current_time_str = current_time.strftime("%Y-%m-%d %H:%M:%S")
 
         if workflow and workflow.has_sub_agents:
             # Show workflow info with sub-agent count
@@ -52,7 +77,7 @@ class DashboardUI:
                 f"[dashboard.header]OpenCode Live Dashboard[/dashboard.header]  "
                 f"[metric.label]Project:[/metric.label] [dashboard.project]{workflow.project_name}[/dashboard.project]  "
                 f"[metric.label]Session:[/metric.label] [dashboard.session]{workflow.display_title}[/dashboard.session]  "
-                f"[metric.label]Updated:[/metric.label] [metric.value]{current_time}[/metric.value]  "
+                f"[metric.label]Updated:[/metric.label] [metric.value]{current_time_str}[/metric.value]  "
                 f"[metric.label]Workflow:[/metric.label] [dashboard.info]{workflow.session_count} sessions[/dashboard.info] "
                 f"[metric.label]([/metric.label][metric.value]1 main + {workflow.sub_agent_count} sub[/metric.value][metric.label])[/metric.label]"
             )
@@ -61,7 +86,7 @@ class DashboardUI:
                 f"[dashboard.header]OpenCode Live Dashboard[/dashboard.header]  "
                 f"[metric.label]Project:[/metric.label] [dashboard.project]{session.project_name}[/dashboard.project]  "
                 f"[metric.label]Session:[/metric.label] [dashboard.session]{session.display_title}[/dashboard.session]  "
-                f"[metric.label]Updated:[/metric.label] [metric.value]{current_time}[/metric.value]  "
+                f"[metric.label]Updated:[/metric.label] [metric.value]{current_time_str}[/metric.value]  "
                 f"[metric.label]Interactions:[/metric.label] [metric.value]{session.interaction_count}[/metric.value]"
             )
 
@@ -83,34 +108,45 @@ class DashboardUI:
         )
 
     def create_token_panel(
-        self, session: SessionData, recent_file: Optional[Any] = None
+        self, session: SessionData, recent_file: Optional[Any] = None,
+        changed_fields: Optional[Set[str]] = None,
     ) -> Panel:
         """Create token consumption panel."""
         session_tokens = session.total_tokens
+
+        ri_s = self._flash_style("tokens.input", changed_fields, "metric.value", "metric.flash.tokens")
+        ro_s = self._flash_style("tokens.output", changed_fields, "metric.value", "metric.flash.tokens")
+        rcw_s = self._flash_style("tokens.cache_write", changed_fields, "metric.value", "metric.flash.tokens")
+        rcr_s = self._flash_style("tokens.cache_read", changed_fields, "metric.value", "metric.flash.tokens")
+        si_s = self._flash_style("tokens.input", changed_fields, "metric.value", "metric.flash.tokens")
+        so_s = self._flash_style("tokens.output", changed_fields, "metric.value", "metric.flash.tokens")
+        scw_s = self._flash_style("tokens.cache_write", changed_fields, "metric.value", "metric.flash.tokens")
+        scr_s = self._flash_style("tokens.cache_read", changed_fields, "metric.value", "metric.flash.tokens")
+        tot_s = self._flash_style("tokens.total", changed_fields, "metric.tokens", "metric.flash.tokens")
 
         # Create compact horizontal layout
         if recent_file:
             token_text = (
                 f"[dashboard.header]Recent Interaction[/dashboard.header]\n"
-                f"[metric.label]Input:[/metric.label] [metric.value]{recent_file.tokens.input:,}[/metric.value]    "
-                f"[metric.label]Cache W:[/metric.label] [metric.value]{recent_file.tokens.cache_write:,}[/metric.value]\n"
-                f"[metric.label]Output:[/metric.label] [metric.value]{recent_file.tokens.output:,}[/metric.value]   "
-                f"[metric.label]Cache R:[/metric.label] [metric.value]{recent_file.tokens.cache_read:,}[/metric.value]\n\n"
+                f"[metric.label]Input:[/metric.label] [{ri_s}]{recent_file.tokens.input:,}[/{ri_s}]    "
+                f"[metric.label]Cache W:[/metric.label] [{rcw_s}]{recent_file.tokens.cache_write:,}[/{rcw_s}]\n"
+                f"[metric.label]Output:[/metric.label] [{ro_s}]{recent_file.tokens.output:,}[/{ro_s}]   "
+                f"[metric.label]Cache R:[/metric.label] [{rcr_s}]{recent_file.tokens.cache_read:,}[/{rcr_s}]\n\n"
                 f"[dashboard.header]Session Totals[/dashboard.header]\n"
-                f"[metric.label]Input:[/metric.label] [metric.value]{session_tokens.input:,}[/metric.value]    "
-                f"[metric.label]Cache W:[/metric.label] [metric.value]{session_tokens.cache_write:,}[/metric.value]\n"
-                f"[metric.label]Output:[/metric.label] [metric.value]{session_tokens.output:,}[/metric.value]   "
-                f"[metric.label]Cache R:[/metric.label] [metric.value]{session_tokens.cache_read:,}[/metric.value]\n"
-                f"[metric.label]Total:[/metric.label] [metric.tokens]{session_tokens.total:,}[/metric.tokens]"
+                f"[metric.label]Input:[/metric.label] [{si_s}]{session_tokens.input:,}[/{si_s}]    "
+                f"[metric.label]Cache W:[/metric.label] [{scw_s}]{session_tokens.cache_write:,}[/{scw_s}]\n"
+                f"[metric.label]Output:[/metric.label] [{so_s}]{session_tokens.output:,}[/{so_s}]   "
+                f"[metric.label]Cache R:[/metric.label] [{scr_s}]{session_tokens.cache_read:,}[/{scr_s}]\n"
+                f"[metric.label]Total:[/metric.label] [{tot_s}]{session_tokens.total:,}[/{tot_s}]"
             )
         else:
             token_text = (
                 f"[dashboard.header]Session Totals[/dashboard.header]\n"
-                f"[metric.label]Input:[/metric.label] [metric.value]{session_tokens.input:,}[/metric.value]    "
-                f"[metric.label]Cache W:[/metric.label] [metric.value]{session_tokens.cache_write:,}[/metric.value]\n"
-                f"[metric.label]Output:[/metric.label] [metric.value]{session_tokens.output:,}[/metric.value]   "
-                f"[metric.label]Cache R:[/metric.label] [metric.value]{session_tokens.cache_read:,}[/metric.value]\n"
-                f"[metric.label]Total:[/metric.label] [metric.tokens]{session_tokens.total:,}[/metric.tokens]"
+                f"[metric.label]Input:[/metric.label] [{si_s}]{session_tokens.input:,}[/{si_s}]    "
+                f"[metric.label]Cache W:[/metric.label] [{scw_s}]{session_tokens.cache_write:,}[/{scw_s}]\n"
+                f"[metric.label]Output:[/metric.label] [{so_s}]{session_tokens.output:,}[/{so_s}]   "
+                f"[metric.label]Cache R:[/metric.label] [{scr_s}]{session_tokens.cache_read:,}[/{scr_s}]\n"
+                f"[metric.label]Total:[/metric.label] [{tot_s}]{session_tokens.total:,}[/{tot_s}]"
             )
 
         return Panel(
@@ -125,9 +161,11 @@ class DashboardUI:
         session: SessionData,
         pricing_data: Dict[str, Any],
         quota: Optional[Decimal] = None,
+        changed_fields: Optional[Set[str]] = None,
     ) -> Panel:
         """Create cost tracking panel."""
         total_cost = session.calculate_total_cost(pricing_data)
+        cost_s = self._flash_style("cost.total", changed_fields, "metric.cost", "metric.flash.cost")
 
         if quota:
             percentage = min(100, float(total_cost / quota) * 100)
@@ -136,14 +174,14 @@ class DashboardUI:
 
             cost_text = (
                 f"[dashboard.header]Cost Tracking[/dashboard.header]\n"
-                f"[metric.label]Session:[/metric.label] [metric.cost]{self._fmt_cost(total_cost)}[/metric.cost]\n"
+                f"[metric.label]Session:[/metric.label] [{cost_s}]{self._fmt_cost(total_cost)}[/{cost_s}]\n"
                 f"[metric.label]Quota:[/metric.label] [metric.cost]{self._fmt_cost(quota)}[/metric.cost]\n"
                 f"[{cost_color}]{progress_bar}[/{cost_color}]"
             )
         else:
             cost_text = (
                 f"[dashboard.header]Cost Tracking[/dashboard.header]\n"
-                f"[metric.label]Session:[/metric.label] [metric.cost]{self._fmt_cost(total_cost)}[/metric.cost]\n"
+                f"[metric.label]Session:[/metric.label] [{cost_s}]{self._fmt_cost(total_cost)}[/{cost_s}]\n"
                 f"[metric.label]No quota configured[/metric.label]"
             )
 
@@ -160,6 +198,7 @@ class DashboardUI:
         pricing_data: Dict[str, Any],
         per_model_output_rates: Optional[Dict[str, float]] = None,
         per_model_context: Optional[Dict[str, Dict[str, Any]]] = None,
+        changed_fields: Optional[Set[str]] = None,
     ) -> Panel:
         """Create model usage panel."""
         model_breakdown = session.get_model_breakdown(pricing_data)
@@ -176,20 +215,26 @@ class DashboardUI:
         model_lines = []
         for model, stats in model_breakdown.items():
             model_name = model[:35] + "..." if len(model) > 38 else model
+            model_key = f"model.{model}"
             
-            # Get context usage for this model
+            tokens_style = self._flash_style(
+                f"{model_key}.tokens", changed_fields, "metric.value", "metric.flash.tokens"
+            )
+            cost_style = self._flash_style(
+                f"{model_key}.cost", changed_fields, "metric.cost", "metric.flash.cost"
+            )
+            
             context_info = per_model_context.get(model, {})
             context_pct = context_info.get("usage_percentage", 0.0)
             context_bar = self.create_compact_progress_bar(context_pct, 8)
             
-            # Get output rate for this model
             output_rate = per_model_output_rates.get(model, 0.0)
             rate_str = f" - {output_rate:.1f} tok/s" if output_rate > 0 else ""
             
             model_lines.append(
                 f"[metric.label]{model_name}[/metric.label]  -  "
-                f"[metric.value]{stats['tokens'].total:,}[/metric.value] [metric.tokens]tok[/metric.tokens]  "
-                f"[metric.cost]{self._fmt_cost(stats['cost'])}[/metric.cost]  -  "
+                f"[{tokens_style}]{stats['tokens'].total:,}[/{tokens_style}] [metric.tokens]tok[/metric.tokens]  "
+                f"[{cost_style}]{self._fmt_cost(stats['cost'])}[/{cost_style}]  -  "
                 f"context {context_bar}{rate_str}"
             )
 
@@ -203,7 +248,8 @@ class DashboardUI:
         )
 
     def create_context_panel(
-        self, recent_file: Optional[Any], context_window: int = 200000
+        self, recent_file: Optional[Any], context_window: int = 200000,
+        changed_fields: Optional[Set[str]] = None,
     ) -> Panel:
         """Create context window status panel."""
         if not recent_file:
@@ -223,10 +269,12 @@ class DashboardUI:
         percentage = min(100, (context_size / context_window) * 100)
         progress_bar = self.create_compact_progress_bar(percentage, 12)
         context_color = self.get_context_color(percentage)
+        cs_s = self._flash_style("context_size", changed_fields, "metric.value", "metric.flash")
+        cw_s = self._flash_style("context_window", changed_fields, "metric.value", "metric.flash")
 
         context_text = (
-            f"[metric.label]Size:[/metric.label] [metric.value]{context_size:,}[/metric.value]\n"
-            f"[metric.label]Window:[/metric.label] [metric.value]{context_window:,}[/metric.value]\n"
+            f"[metric.label]Size:[/metric.label] [{cs_s}]{context_size:,}[/{cs_s}]\n"
+            f"[metric.label]Window:[/metric.label] [{cw_s}]{context_window:,}[/{cw_s}]\n"
             f"[{context_color}]{progress_bar}[/{context_color}]"
         )
 
@@ -237,8 +285,9 @@ class DashboardUI:
             border_style="dashboard.border",
         )
 
-    def create_burn_rate_panel(self, burn_rate: float) -> Panel:
+    def create_burn_rate_panel(self, burn_rate: float, changed_fields: Optional[Set[str]] = None) -> Panel:
         """Create output token rate panel (tokens per second)."""
+        br_s = self._flash_style("burn_rate", changed_fields, "metric.value", "metric.flash")
         if burn_rate == 0:
             burn_text = "[metric.label]No recent activity[/metric.label]"
         else:
@@ -253,7 +302,7 @@ class DashboardUI:
                 level = "[status.success]SLOW[/status.success]"
 
             burn_text = (
-                f"[metric.value]{burn_rate:,.1f}[/metric.value] [metric.tokens]tok/sec[/metric.tokens]\n"
+                f"[{br_s}]{burn_rate:,.1f}[/{br_s}] [metric.tokens]tok/sec[/metric.tokens]\n"
                 f"{level}"
             )
 
@@ -264,7 +313,12 @@ class DashboardUI:
             border_style="dashboard.border",
         )
 
-    def create_session_time_panel(self, session: SessionData) -> Panel:
+    def create_session_time_panel(
+        self,
+        session: SessionData,
+        current_time: Optional[datetime] = None,
+        changed_fields: Optional[Set[str]] = None,
+    ) -> Panel:
         """Create session time progress panel with 5-hour maximum."""
         if not session.start_time:
             return Panel(
@@ -274,7 +328,8 @@ class DashboardUI:
             )
 
         # Calculate duration from start_time to now (updates continuously even when idle)
-        current_time = datetime.now()
+        if current_time is None:
+            current_time = datetime.now()
         session_duration = current_time - session.start_time
         duration_ms = int(session_duration.total_seconds() * 1000)
 
@@ -289,9 +344,10 @@ class DashboardUI:
         # Create progress bar with time-based colors
         progress_bar = self.create_compact_progress_bar(percentage, 12)
         time_color = self.get_time_color(percentage)
+        dur_s = self._flash_style("duration_ms", changed_fields, "metric.value", "metric.flash")
 
         time_text = (
-            f"[metric.label]Duration:[/metric.label] [metric.value]{duration_display}[/metric.value]\n"
+            f"[metric.label]Duration:[/metric.label] [{dur_s}]{duration_display}[/{dur_s}]\n"
             f"[metric.label]Max:[/metric.label] [metric.value]{max_hours:.0f}h[/metric.value]\n"
             f"[{time_color}]{progress_bar}[/{time_color}]"
         )
@@ -308,10 +364,13 @@ class DashboardUI:
         session: SessionData,
         pricing_data: Dict[str, Any],
         quota: Optional[Decimal] = None,
+        current_time: Optional[datetime] = None,
+        changed_fields: Optional[Set[str]] = None,
     ) -> Panel:
         """Create combined status panel with Cost + Session Time."""
         # --- Cost section ---
         total_cost = session.calculate_total_cost(pricing_data)
+        cost_s = self._flash_style("cost.total", changed_fields, "metric.cost", "metric.flash.cost")
 
         if quota:
             percentage = min(100, float(total_cost / quota) * 100)
@@ -319,20 +378,21 @@ class DashboardUI:
             cost_color = self.get_cost_color(percentage)
             cost_section = (
                 f"[dashboard.header]Cost[/dashboard.header]\n"
-                f"[metric.label]Session:[/metric.label] [metric.cost]{self._fmt_cost(total_cost)}[/metric.cost]  "
+                f"[metric.label]Session:[/metric.label] [{cost_s}]{self._fmt_cost(total_cost)}[/{cost_s}]  "
                 f"[metric.label]Quota:[/metric.label] [metric.cost]{self._fmt_cost(quota)}[/metric.cost]\n"
                 f"[{cost_color}]{progress_bar}[/{cost_color}]"
             )
         else:
             cost_section = (
                 f"[dashboard.header]Cost[/dashboard.header]\n"
-                f"[metric.label]Session:[/metric.label] [metric.cost]{self._fmt_cost(total_cost)}[/metric.cost]  "
+                f"[metric.label]Session:[/metric.label] [{cost_s}]{self._fmt_cost(total_cost)}[/{cost_s}]  "
                 f"[dim]No quota[/dim]"
             )
 
         # --- Time section ---
         if session.start_time:
-            current_time = datetime.now()
+            if current_time is None:
+                current_time = datetime.now()
             session_duration = current_time - session.start_time
             duration_ms = int(session_duration.total_seconds() * 1000)
             max_hours = 5.0
@@ -341,9 +401,10 @@ class DashboardUI:
             duration_display = TimeUtils.format_duration_hm(duration_ms)
             progress_bar = self.create_compact_progress_bar(percentage, 10)
             time_color = self.get_time_color(percentage)
+            dur_s = self._flash_style("duration_ms", changed_fields, "metric.value", "metric.flash")
             time_section = (
                 f"[dashboard.header]Time[/dashboard.header]\n"
-                f"[metric.label]Duration:[/metric.label] [metric.value]{duration_display}[/metric.value]  "
+                f"[metric.label]Duration:[/metric.label] [{dur_s}]{duration_display}[/{dur_s}]  "
                 f"[metric.label]Max:[/metric.label] [metric.value]{max_hours:.0f}h[/metric.value]\n"
                 f"[{time_color}]{progress_bar}[/{time_color}]"
             )
@@ -371,10 +432,13 @@ class DashboardUI:
         workflow: SessionWorkflow,
         pricing_data: Dict[str, Any],
         quota: Optional[Decimal] = None,
+        current_time: Optional[datetime] = None,
+        changed_fields: Optional[Set[str]] = None,
     ) -> Panel:
         """Create combined status panel with Workflow Cost + Workflow Time."""
         # --- Cost section ---
         total_cost = workflow.calculate_total_cost(pricing_data)
+        cost_s = self._flash_style("cost.total", changed_fields, "metric.cost", "metric.flash.cost")
 
         if quota:
             percentage = min(100, float(total_cost / quota) * 100)
@@ -382,20 +446,21 @@ class DashboardUI:
             cost_color = self.get_cost_color(percentage)
             cost_section = (
                 f"[dashboard.header]Cost[/dashboard.header]\n"
-                f"[metric.label]Total:[/metric.label] [metric.cost]{self._fmt_cost(total_cost)}[/metric.cost]  "
+                f"[metric.label]Total:[/metric.label] [{cost_s}]{self._fmt_cost(total_cost)}[/{cost_s}]  "
                 f"[metric.label]Quota:[/metric.label] [metric.cost]{self._fmt_cost(quota)}[/metric.cost]\n"
                 f"[{cost_color}]{progress_bar}[/{cost_color}]"
             )
         else:
             cost_section = (
                 f"[dashboard.header]Cost[/dashboard.header]\n"
-                f"[metric.label]Total:[/metric.label] [metric.cost]{self._fmt_cost(total_cost)}[/metric.cost]  "
+                f"[metric.label]Total:[/metric.label] [{cost_s}]{self._fmt_cost(total_cost)}[/{cost_s}]  "
                 f"[dim]No quota[/dim]"
             )
 
         # --- Time section ---
         if workflow.start_time:
-            current_time = datetime.now()
+            if current_time is None:
+                current_time = datetime.now()
             workflow_duration = current_time - workflow.start_time
             duration_ms = int(workflow_duration.total_seconds() * 1000)
             max_hours = 5.0
@@ -404,9 +469,10 @@ class DashboardUI:
             duration_display = TimeUtils.format_duration_hm(duration_ms)
             progress_bar = self.create_compact_progress_bar(percentage, 10)
             time_color = self.get_time_color(percentage)
+            dur_s = self._flash_style("duration_ms", changed_fields, "metric.value", "metric.flash")
             time_section = (
                 f"[dashboard.header]Time[/dashboard.header]\n"
-                f"[metric.label]Duration:[/metric.label] [metric.value]{duration_display}[/metric.value]  "
+                f"[metric.label]Duration:[/metric.label] [{dur_s}]{duration_display}[/{dur_s}]  "
                 f"[metric.label]Max:[/metric.label] [metric.value]{max_hours:.0f}h[/metric.value]\n"
                 f"[{time_color}]{progress_bar}[/{time_color}]"
             )
@@ -528,6 +594,7 @@ class DashboardUI:
         model_cost: Optional[Decimal] = None,
         context_pct: Optional[float] = None,
         output_rate: Optional[float] = None,
+        changed_fields: Optional[Set[str]] = None,
     ) -> Panel:
         """Create a panel showing tool usage for a single model.
 
@@ -538,6 +605,7 @@ class DashboardUI:
             model_cost: Optional cost for this model to display in header
             context_pct: Optional context usage percentage for this model
             output_rate: Optional output rate (tok/sec) for this model
+            changed_fields: Optional set of changed field names for flash highlighting
 
         Returns:
             Panel with tool usage information for this model
@@ -559,8 +627,15 @@ class DashboardUI:
         lines = []
 
         if model_tokens is not None:
-            cost_str = f" [metric.cost]{self._fmt_cost(model_cost)}[/metric.cost]" if model_cost is not None else ""
-            
+            model_key = f"model.{model_tool_usage.model_name}"
+            tokens_style = self._flash_style(
+                f"{model_key}.tokens", changed_fields, "metric.value", "metric.flash.tokens"
+            )
+            cost_style = self._flash_style(
+                f"{model_key}.cost", changed_fields, "metric.cost", "metric.flash.cost"
+            )
+            cost_str = f" [{cost_style}]{self._fmt_cost(model_cost)}[/{cost_style}]" if model_cost is not None else ""
+
             # Add context and output rate info
             extra_info = []
             if context_pct is not None:
@@ -568,11 +643,11 @@ class DashboardUI:
                 extra_info.append(f"context {context_bar}")
             if output_rate is not None and output_rate > 0:
                 extra_info.append(f"{output_rate:.1f} tok/s")
-            
+
             extra_str = "  " + "  ".join(extra_info) if extra_info else ""
-            
+
             lines.append(
-                f"[metric.value]{model_tokens:,}[/metric.value] [metric.tokens]tokens[/metric.tokens]{cost_str}{extra_str}"
+                f"[{tokens_style}]{model_tokens:,}[/{tokens_style}] [metric.tokens]tokens[/metric.tokens]{cost_str}{extra_str}"
             )
             lines.append("[dashboard.border]────────────────────────[/dashboard.border]")
 
@@ -606,6 +681,7 @@ class DashboardUI:
         model_breakdown: Optional[Dict[str, Dict[str, Any]]] = None,
         per_model_output_rates: Optional[Dict[str, float]] = None,
         per_model_context: Optional[Dict[str, Dict[str, Any]]] = None,
+        changed_fields: Optional[Set[str]] = None,
     ) -> Layout:
         """Create a 2-column grid layout for per-model tool panels.
 
@@ -614,6 +690,7 @@ class DashboardUI:
             model_breakdown: Optional dict mapping model names to token/cost data
             per_model_output_rates: Optional dict mapping model to output rate
             per_model_context: Optional dict mapping model to context info
+            changed_fields: Optional set of changed field names for flash highlighting
 
         Returns:
             Layout containing the grid of model tool panels
@@ -661,7 +738,8 @@ class DashboardUI:
             model_tokens, model_cost, context_pct, output_rate = get_model_info(model_usage.model_name)
             left_panels.append(self.create_model_tool_panel(
                 model_usage, model_tokens=model_tokens, model_cost=model_cost,
-                context_pct=context_pct, output_rate=output_rate
+                context_pct=context_pct, output_rate=output_rate,
+                changed_fields=changed_fields
             ))
 
         right_panels = []
@@ -669,7 +747,8 @@ class DashboardUI:
             model_tokens, model_cost, context_pct, output_rate = get_model_info(model_usage.model_name)
             right_panels.append(self.create_model_tool_panel(
                 model_usage, model_tokens=model_tokens, model_cost=model_cost,
-                context_pct=context_pct, output_rate=output_rate
+                context_pct=context_pct, output_rate=output_rate,
+                changed_fields=changed_fields
             ))
 
         left_column = Layout()
@@ -709,8 +788,12 @@ class DashboardUI:
         tool_stats: Optional[List[ToolUsageStats]] = None,
         tool_stats_by_model: Optional[List[ModelToolUsage]] = None,
         controls_hint: Optional[str] = None,
+        current_time: Optional[datetime] = None,
+        changed_fields: Optional[Set[str]] = None,
     ) -> Layout:
         """Create the complete dashboard layout."""
+        if current_time is None:
+            current_time = datetime.now()
         layout = Layout()
 
         # Default empty dicts if not provided
@@ -720,19 +803,19 @@ class DashboardUI:
         # Use workflow data if available, otherwise use session data
         if workflow and workflow.has_sub_agents:
             # Create panels using workflow totals
-            header = self.create_header(session, workflow)
-            token_panel = self.create_workflow_token_panel(workflow, recent_file)
-            status_panel = self.create_workflow_status_panel(workflow, pricing_data, quota)
+            header = self.create_header(session, workflow, current_time=current_time)
+            token_panel = self.create_workflow_token_panel(workflow, recent_file, changed_fields=changed_fields)
+            status_panel = self.create_workflow_status_panel(workflow, pricing_data, quota, current_time=current_time, changed_fields=changed_fields)
             model_panel = self.create_workflow_model_panel(
-                workflow, pricing_data, per_model_output_rates, per_model_context
+                workflow, pricing_data, per_model_output_rates, per_model_context, changed_fields=changed_fields
             )
         else:
             # Create panels using single session data
-            header = self.create_header(session)
-            token_panel = self.create_token_panel(session, recent_file)
-            status_panel = self.create_status_panel(session, pricing_data, quota)
+            header = self.create_header(session, current_time=current_time)
+            token_panel = self.create_token_panel(session, recent_file, changed_fields=changed_fields)
+            status_panel = self.create_status_panel(session, pricing_data, quota, current_time=current_time, changed_fields=changed_fields)
             model_panel = self.create_model_panel(
-                session, pricing_data, per_model_output_rates, per_model_context
+                session, pricing_data, per_model_output_rates, per_model_context, changed_fields=changed_fields
             )
 
         recent_file_panel = self.create_recent_file_panel(recent_file)
@@ -768,6 +851,7 @@ class DashboardUI:
                 model_breakdown=model_breakdown,
                 per_model_output_rates=per_model_output_rates,
                 per_model_context=per_model_context,
+                changed_fields=changed_fields,
             )
             model_ratio = 2
             tool_ratio = 3
@@ -857,34 +941,45 @@ class DashboardUI:
         return table
 
     def create_workflow_token_panel(
-        self, workflow: SessionWorkflow, recent_file: Optional[Any] = None
+        self, workflow: SessionWorkflow, recent_file: Optional[Any] = None,
+        changed_fields: Optional[Set[str]] = None,
     ) -> Panel:
         """Create token consumption panel for workflow."""
         workflow_tokens = workflow.total_tokens
+
+        ri_s = self._flash_style("tokens.input", changed_fields, "metric.value", "metric.flash.tokens")
+        ro_s = self._flash_style("tokens.output", changed_fields, "metric.value", "metric.flash.tokens")
+        rcw_s = self._flash_style("tokens.cache_write", changed_fields, "metric.value", "metric.flash.tokens")
+        rcr_s = self._flash_style("tokens.cache_read", changed_fields, "metric.value", "metric.flash.tokens")
+        wi_s = self._flash_style("tokens.input", changed_fields, "metric.value", "metric.flash.tokens")
+        wo_s = self._flash_style("tokens.output", changed_fields, "metric.value", "metric.flash.tokens")
+        wcw_s = self._flash_style("tokens.cache_write", changed_fields, "metric.value", "metric.flash.tokens")
+        wcr_s = self._flash_style("tokens.cache_read", changed_fields, "metric.value", "metric.flash.tokens")
+        tot_s = self._flash_style("tokens.total", changed_fields, "metric.tokens", "metric.flash.tokens")
 
         # Create compact horizontal layout showing workflow totals
         if recent_file:
             token_text = (
                 f"[dashboard.header]Recent Interaction[/dashboard.header]\n"
-                f"[metric.label]Input:[/metric.label] [metric.value]{recent_file.tokens.input:,}[/metric.value]    "
-                f"[metric.label]Cache W:[/metric.label] [metric.value]{recent_file.tokens.cache_write:,}[/metric.value]\n"
-                f"[metric.label]Output:[/metric.label] [metric.value]{recent_file.tokens.output:,}[/metric.value]   "
-                f"[metric.label]Cache R:[/metric.label] [metric.value]{recent_file.tokens.cache_read:,}[/metric.value]\n\n"
+                f"[metric.label]Input:[/metric.label] [{ri_s}]{recent_file.tokens.input:,}[/{ri_s}]    "
+                f"[metric.label]Cache W:[/metric.label] [{rcw_s}]{recent_file.tokens.cache_write:,}[/{rcw_s}]\n"
+                f"[metric.label]Output:[/metric.label] [{ro_s}]{recent_file.tokens.output:,}[/{ro_s}]   "
+                f"[metric.label]Cache R:[/metric.label] [{rcr_s}]{recent_file.tokens.cache_read:,}[/{rcr_s}]\n\n"
                 f"[dashboard.header]Workflow Totals[/dashboard.header] [metric.label]({workflow.session_count} sessions)[/metric.label]\n"
-                f"[metric.label]Input:[/metric.label] [metric.value]{workflow_tokens.input:,}[/metric.value]    "
-                f"[metric.label]Cache W:[/metric.label] [metric.value]{workflow_tokens.cache_write:,}[/metric.value]\n"
-                f"[metric.label]Output:[/metric.label] [metric.value]{workflow_tokens.output:,}[/metric.value]   "
-                f"[metric.label]Cache R:[/metric.label] [metric.value]{workflow_tokens.cache_read:,}[/metric.value]\n"
-                f"[metric.label]Total:[/metric.label] [metric.tokens]{workflow_tokens.total:,}[/metric.tokens]"
+                f"[metric.label]Input:[/metric.label] [{wi_s}]{workflow_tokens.input:,}[/{wi_s}]    "
+                f"[metric.label]Cache W:[/metric.label] [{wcw_s}]{workflow_tokens.cache_write:,}[/{wcw_s}]\n"
+                f"[metric.label]Output:[/metric.label] [{wo_s}]{workflow_tokens.output:,}[/{wo_s}]   "
+                f"[metric.label]Cache R:[/metric.label] [{wcr_s}]{workflow_tokens.cache_read:,}[/{wcr_s}]\n"
+                f"[metric.label]Total:[/metric.label] [{tot_s}]{workflow_tokens.total:,}[/{tot_s}]"
             )
         else:
             token_text = (
                 f"[dashboard.header]Workflow Totals[/dashboard.header] [metric.label]({workflow.session_count} sessions)[/metric.label]\n"
-                f"[metric.label]Input:[/metric.label] [metric.value]{workflow_tokens.input:,}[/metric.value]    "
-                f"[metric.label]Cache W:[/metric.label] [metric.value]{workflow_tokens.cache_write:,}[/metric.value]\n"
-                f"[metric.label]Output:[/metric.label] [metric.value]{workflow_tokens.output:,}[/metric.value]   "
-                f"[metric.label]Cache R:[/metric.label] [metric.value]{workflow_tokens.cache_read:,}[/metric.value]\n"
-                f"[metric.label]Total:[/metric.label] [metric.tokens]{workflow_tokens.total:,}[/metric.tokens]"
+                f"[metric.label]Input:[/metric.label] [{wi_s}]{workflow_tokens.input:,}[/{wi_s}]    "
+                f"[metric.label]Cache W:[/metric.label] [{wcw_s}]{workflow_tokens.cache_write:,}[/{wcw_s}]\n"
+                f"[metric.label]Output:[/metric.label] [{wo_s}]{workflow_tokens.output:,}[/{wo_s}]   "
+                f"[metric.label]Cache R:[/metric.label] [{wcr_s}]{workflow_tokens.cache_read:,}[/{wcr_s}]\n"
+                f"[metric.label]Total:[/metric.label] [{tot_s}]{workflow_tokens.total:,}[/{tot_s}]"
             )
 
         return Panel(
@@ -899,9 +994,11 @@ class DashboardUI:
         workflow: SessionWorkflow,
         pricing_data: Dict[str, Any],
         quota: Optional[Decimal] = None,
+        changed_fields: Optional[Set[str]] = None,
     ) -> Panel:
         """Create cost tracking panel for workflow."""
         total_cost = workflow.calculate_total_cost(pricing_data)
+        cost_s = self._flash_style("cost.total", changed_fields, "metric.cost", "metric.flash.cost")
 
         if quota:
             percentage = min(100, float(total_cost / quota) * 100)
@@ -910,14 +1007,14 @@ class DashboardUI:
 
             cost_text = (
                 f"[dashboard.header]Workflow Cost[/dashboard.header]\n"
-                f"[metric.label]Total:[/metric.label] [metric.cost]{self._fmt_cost(total_cost)}[/metric.cost]\n"
+                f"[metric.label]Total:[/metric.label] [{cost_s}]{self._fmt_cost(total_cost)}[/{cost_s}]\n"
                 f"[metric.label]Quota:[/metric.label] [metric.cost]{self._fmt_cost(quota)}[/metric.cost]\n"
                 f"[{cost_color}]{progress_bar}[/{cost_color}]"
             )
         else:
             cost_text = (
                 f"[dashboard.header]Workflow Cost[/dashboard.header]\n"
-                f"[metric.label]Total:[/metric.label] [metric.cost]{self._fmt_cost(total_cost)}[/metric.cost]\n"
+                f"[metric.label]Total:[/metric.label] [{cost_s}]{self._fmt_cost(total_cost)}[/{cost_s}]\n"
                 f"[metric.label]No quota configured[/metric.label]"
             )
 
@@ -934,6 +1031,7 @@ class DashboardUI:
         pricing_data: Dict[str, Any],
         per_model_output_rates: Optional[Dict[str, float]] = None,
         per_model_context: Optional[Dict[str, Dict[str, Any]]] = None,
+        changed_fields: Optional[Set[str]] = None,
     ) -> Panel:
         """Create model usage panel for workflow."""
         from collections import defaultdict
@@ -941,7 +1039,6 @@ class DashboardUI:
         per_model_output_rates = per_model_output_rates or {}
         per_model_context = per_model_context or {}
 
-        # Aggregate model stats across all sessions
         model_data: Dict[str, Dict[str, Any]] = defaultdict(
             lambda: {"tokens": 0, "cost": Decimal("0.0")}
         )
@@ -964,20 +1061,26 @@ class DashboardUI:
             model_data.items(), key=lambda x: x[1]["cost"], reverse=True
         ):
             model_name = model[:35] + "..." if len(model) > 38 else model
+            model_key = f"model.{model}"
             
-            # Get context usage for this model
+            tokens_style = self._flash_style(
+                f"{model_key}.tokens", changed_fields, "metric.value", "metric.flash.tokens"
+            )
+            cost_style = self._flash_style(
+                f"{model_key}.cost", changed_fields, "metric.cost", "metric.flash.cost"
+            )
+            
             context_info = per_model_context.get(model, {})
             context_pct = context_info.get("usage_percentage", 0.0)
             context_bar = self.create_compact_progress_bar(context_pct, 8)
             
-            # Get output rate for this model
             output_rate = per_model_output_rates.get(model, 0.0)
             rate_str = f" - {output_rate:.1f} tok/s" if output_rate > 0 else ""
             
             model_lines.append(
                 f"[metric.label]{model_name}[/metric.label]  -  "
-                f"[metric.value]{stats['tokens']:,}[/metric.value] [metric.tokens]tok[/metric.tokens]  "
-                f"[metric.cost]{self._fmt_cost(stats['cost'])}[/metric.cost]  -  "
+                f"[{tokens_style}]{stats['tokens']:,}[/{tokens_style}] [metric.tokens]tok[/metric.tokens]  "
+                f"[{cost_style}]{self._fmt_cost(stats['cost'])}[/{cost_style}]  -  "
                 f"context {context_bar}{rate_str}"
             )
 
@@ -990,7 +1093,12 @@ class DashboardUI:
             border_style="dashboard.border",
         )
 
-    def create_workflow_time_panel(self, workflow: SessionWorkflow) -> Panel:
+    def create_workflow_time_panel(
+        self,
+        workflow: SessionWorkflow,
+        current_time: Optional[datetime] = None,
+        changed_fields: Optional[Set[str]] = None,
+    ) -> Panel:
         """Create session time progress panel for workflow."""
         if not workflow.start_time:
             return Panel(
@@ -1000,7 +1108,8 @@ class DashboardUI:
             )
 
         # Calculate duration from workflow start_time to now
-        current_time = datetime.now()
+        if current_time is None:
+            current_time = datetime.now()
         workflow_duration = current_time - workflow.start_time
         duration_ms = int(workflow_duration.total_seconds() * 1000)
 
@@ -1015,9 +1124,10 @@ class DashboardUI:
         # Create progress bar with time-based colors
         progress_bar = self.create_compact_progress_bar(percentage, 12)
         time_color = self.get_time_color(percentage)
+        dur_s = self._flash_style("duration_ms", changed_fields, "metric.value", "metric.flash")
 
         time_text = (
-            f"[metric.label]Duration:[/metric.label] [metric.value]{duration_display}[/metric.value]\n"
+            f"[metric.label]Duration:[/metric.label] [{dur_s}]{duration_display}[/{dur_s}]\n"
             f"[metric.label]Max:[/metric.label] [metric.value]{max_hours:.0f}h[/metric.value]\n"
             f"[{time_color}]{progress_bar}[/{time_color}]"
         )
