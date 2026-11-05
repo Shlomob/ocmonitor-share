@@ -5,6 +5,139 @@ from ocmonitor.config import PathsConfig
 from ocmonitor.services.live_monitor import LiveMonitor
 
 
+class TestLiveMonitorDisplayMode:
+    """Tests for Rich Live full-screen and inline setup."""
+
+    @staticmethod
+    def _record_live_instances(monkeypatch):
+        """Replace Rich Live and return every instance created by a monitor."""
+        live_instances = []
+
+        class FakeLive:
+            """A minimal context manager used to mimic Rich Live in tests.
+
+            Instances are appended to the outer `live_instances` list and
+            construction kwargs are captured for assertions.
+            """
+            def __init__(self, *args, **kwargs):
+                """Initialize the fake live instance and record the kwargs.
+
+                The instance is appended to the enclosing `live_instances` list
+                so tests can assert how the Live context was constructed.
+                """
+                self.kwargs = kwargs
+                live_instances.append(self)
+
+            def __enter__(self):
+                """Enter the context manager and return this instance."""
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                """Exit the context manager and do not suppress exceptions.
+
+                Returning False ensures any exception (e.g., KeyboardInterrupt)
+                propagates to the test.
+                """
+                return False
+
+        monkeypatch.setattr("ocmonitor.services.live_monitor.Live", FakeLive)
+        return live_instances
+
+    def test_file_monitor_uses_full_screen_by_default_and_inline_when_requested(
+        self, monkeypatch, tmp_path
+    ):
+        """Verify file-based LiveMonitor uses full-screen by default and inline when requested.
+
+        The test asserts that the Live context is created with `screen=True` for the
+        default call and `screen=False` when invoked with `inline=True`.
+        """
+        workflow = SimpleNamespace(
+            workflow_id="file-workflow",
+            main_session=SimpleNamespace(session_id="file-session", files=[]),
+            all_sessions=[SimpleNamespace(session_id="file-session")],
+            has_sub_agents=False,
+            display_title="File workflow",
+            project_name="project",
+            session_count=1,
+            sub_agent_count=0,
+        )
+        monitor = LiveMonitor(pricing_data={}, init_from_db=False)
+        monkeypatch.setattr(
+            monitor, "_get_file_active_workflows", lambda *args, **kwargs: [workflow]
+        )
+        monkeypatch.setattr(monitor, "_generate_workflow_dashboard", lambda *args: None)
+        live_instances = self._record_live_instances(monkeypatch)
+        monkeypatch.setattr(
+            "ocmonitor.services.live_monitor.time.time",
+            lambda: (_ for _ in ()).throw(KeyboardInterrupt),
+        )
+
+        monitor.start_monitoring(str(tmp_path))
+        monitor.start_monitoring(str(tmp_path), inline=True)
+
+        assert [instance.kwargs["screen"] for instance in live_instances] == [
+            True,
+            False,
+        ]
+        assert all(
+            instance.kwargs["refresh_per_second"] == 10
+            for instance in live_instances
+        )
+
+    def test_sqlite_monitor_uses_full_screen_by_default_and_inline_when_requested(
+        self, monkeypatch, tmp_path
+    ):
+        """Verify SQLite-based LiveMonitor uses full-screen by default and inline when requested.
+
+        The test asserts that the Live context is created with `screen=True` for the
+        default call and `screen=False` when invoked with `inline=True`.
+        """
+        workflow = {
+            "workflow_id": "sqlite-workflow",
+            "main_session": SimpleNamespace(
+                session_id="sqlite-session",
+                display_title="SQLite workflow",
+                project_name="project",
+                files=[],
+                start_time=None,
+            ),
+            "all_sessions": [SimpleNamespace(session_id="sqlite-session")],
+            "has_sub_agents": False,
+            "display_title": "SQLite workflow",
+            "project_name": "project",
+            "session_count": 1,
+            "sub_agent_count": 0,
+        }
+        monitor = LiveMonitor(pricing_data={}, init_from_db=False)
+        monkeypatch.setattr(
+            "ocmonitor.services.live_monitor.SQLiteProcessor.find_database_path",
+            lambda: str(tmp_path / "opencode.db"),
+        )
+        monkeypatch.setattr(
+            monitor, "_get_sqlite_active_workflows", lambda *args, **kwargs: [workflow]
+        )
+        monkeypatch.setattr(
+            monitor, "_generate_sqlite_workflow_dashboard", lambda *args: None
+        )
+        live_instances = self._record_live_instances(monkeypatch)
+        monkeypatch.setattr(
+            "ocmonitor.services.live_monitor.time.time",
+            lambda: (_ for _ in ()).throw(KeyboardInterrupt),
+        )
+
+        monitor.start_sqlite_workflow_monitoring()
+        monitor.start_sqlite_workflow_monitoring(inline=True)
+
+        assert [instance.kwargs["screen"] for instance in live_instances] == [
+            True,
+            False,
+        ]
+        assert all(
+            instance.kwargs["refresh_per_second"] == 10
+            for instance in live_instances
+        )
+
+
 class TestMultiWorkflowTracking:
     def test_tracks_multiple_active_workflows(self, monkeypatch, tmp_path):
         active_workflow_a = {

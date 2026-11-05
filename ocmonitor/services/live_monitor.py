@@ -821,6 +821,7 @@ class LiveMonitor:
         refresh_interval: int = 5,
         selected_session_id: Optional[str] = None,
         interactive_switch: bool = False,
+        inline: bool = False,
     ):
         """Start live monitoring of all active workflows (main session + sub-agents).
 
@@ -831,6 +832,7 @@ class LiveMonitor:
             refresh_interval: Update interval in seconds
             selected_session_id: Optional workflow/main/sub-agent ID to pin
             interactive_switch: Enable command-driven live workflow switching
+            inline: Keep dashboard output in the normal terminal buffer
         """
         try:
             active_workflows = self._get_file_active_workflows(
@@ -902,6 +904,7 @@ class LiveMonitor:
                 ),
                 refresh_per_second=10,
                 console=self.console,
+                screen=not inline,
             ) as live:
                 descriptors = self._describe_file_workflows(active_workflows)
                 next_refresh_at = time.time() + refresh_interval
@@ -1481,6 +1484,7 @@ class LiveMonitor:
         refresh_interval: int = 5,
         selected_session_id: Optional[str] = None,
         interactive_switch: bool = False,
+        inline: bool = False,
     ):
         """Start live monitoring of all active workflows from SQLite (v1.2.0+).
 
@@ -1491,6 +1495,7 @@ class LiveMonitor:
             refresh_interval: Update interval in seconds
             selected_session_id: Optional workflow/main/sub-agent ID to pin
             interactive_switch: Enable command-driven live workflow switching
+            inline: Keep dashboard output in the normal terminal buffer
         """
         try:
             # Check if SQLite is available
@@ -1571,6 +1576,7 @@ class LiveMonitor:
                 ),
                 refresh_per_second=10,
                 console=self.console,
+                screen=not inline,
             ) as live:
                 descriptors = self._describe_sqlite_workflows(active_workflows)
                 next_refresh_at = time.time() + refresh_interval
