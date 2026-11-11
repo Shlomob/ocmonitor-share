@@ -398,7 +398,8 @@ class TableFormatter:
 
     def create_progress_bar(self, percentage: float, width: int = 20) -> str:
         """Create a text-based progress bar."""
-        filled = int(width * percentage / 100)
+        clamped = max(0.0, min(100.0, percentage))
+        filled = int(width * clamped / 100)
         bar = '█' * filled + '░' * (width - filled)
         return f"[{bar}] {percentage:.1f}%"
 

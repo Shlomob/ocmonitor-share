@@ -176,3 +176,22 @@ class TestSplitProviderModel:
         )
         assert provider == "openrouter"
         assert model == "anthropic/claude-opus"
+
+
+class TestCreateProgressBar:
+    """Tests for TableFormatter.create_progress_bar width contract."""
+
+    def test_over_100_percent_stays_within_width(self):
+        """Over-quota percentages must not overflow the fixed bar width."""
+        formatter = TableFormatter()
+        bar = formatter.create_progress_bar(150)
+        assert bar.count("█") == 20
+        assert bar.count("░") == 0
+        assert "150.0%" in bar
+
+    def test_negative_percentage_renders_empty(self):
+        formatter = TableFormatter()
+        bar = formatter.create_progress_bar(-20)
+        assert bar.count("█") == 0
+        assert bar.count("░") == 20
+        assert "-20.0%" in bar
