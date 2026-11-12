@@ -77,9 +77,8 @@ class WorkflowWrapper:
                 (self.end_time - self.start_time).total_seconds() * 1000
             )
             self.duration_hours: float = self.duration_ms / (1000 * 60 * 60)
-            self.duration_percentage: float = min(
-                100.0, (self.duration_hours / 5.0) * 100
-            )
+            # Not capped: values above 100 mean the session ran over quota
+            self.duration_percentage: float = (self.duration_hours / 5.0) * 100
         else:
             self.duration_ms = None
             self.duration_hours = 0.0

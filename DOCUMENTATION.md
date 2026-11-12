@@ -501,7 +501,7 @@ ocmonitor live ~/.local/share/opencode/storage/message --refresh 10
 **Features:**
 - 🔄 Auto-refreshing display with professional UI redesign
 - 📊 Real-time cost tracking with progress indicators  
-- ⏱️ Live session duration with 5-hour progress bar and color-coded time alerts
+- ⏱️ Live session duration with 5-hour progress bar and color-coded time alerts (over-quota sessions show their real percentage above 100%)
 - 📈 Token usage updates and context window monitoring
 - 🚦 Color-coded status indicators (green/orange/yellow/red based on time elapsed)
 - 📂 Project name display for better context awareness
