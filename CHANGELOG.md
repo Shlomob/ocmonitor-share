@@ -5,6 +5,16 @@ All notable changes to OpenCode Monitor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] - Unreleased
+
+### 🐛 Bug Fixes
+
+- **Progress bar width is now fixed** — `TableFormatter.create_progress_bar`, `DashboardUI.create_progress_bar` / `create_compact_progress_bar`, and `utils.formatting.TableFormatter.create_progress_bar` clamp the fill computation to `[0, 100]`. Percentages above 100 previously widened the bar past its configured width and negative values shrank it, misaligning the Session Quota column. The `NNN.N%` label is unchanged and still prints the raw value
+
+### ✨ Improvements
+
+- **Over-quota sessions show their real percentage** — `SessionData.duration_percentage`, the live monitor session group, and the live dashboard's 5-hour time bars no longer cap at 100%. A session that ran 7.5 hours now displays `150.0%` with a full bar instead of flattening to `100.0%`. Note: `duration_percentage` is a computed field in JSON exports, so exported values can now exceed 100
+
 ## [1.0.5] - 2026-10-22
 
 ### 🌐 Provider-Aware Model Pricing

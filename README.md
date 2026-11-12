@@ -38,7 +38,7 @@ Transform your OpenCode usage data into beautiful, actionable insights with comp
 - **📊 Progress Bars** - Visual indicators for cost quotas, context usage, and session time
 - **🚥 Color Coding** - Green/yellow/red status indicators based on usage thresholds
 - **📱 Live Dashboard** - Real-time monitoring with project names and session titles
-- **⏰ Session Time Tracking** - 5-hour session progress bar with color-coded time alerts
+- **⏰ Session Time Tracking** - 5-hour session progress bar with color-coded time alerts (sessions that run past the quota show their real percentage, e.g. `150.0%`)
 - **🔧 Tool Usage Panel** - Track tool success rates (bash, read, edit, etc.) in live dashboard
 
 ### 📤 Data Export & Integration
