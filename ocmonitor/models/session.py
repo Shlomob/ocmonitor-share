@@ -246,9 +246,12 @@ class SessionData(BaseModel):
     @computed_field
     @property
     def duration_percentage(self) -> float:
-        """Calculate session duration as percentage of 5-hour maximum."""
+        """Calculate session duration as percentage of the 5-hour quota.
+
+        Not capped: values above 100 mean the session ran over quota.
+        """
         max_hours = 5.0
-        return min(100.0, (self.duration_hours / max_hours) * 100.0)
+        return (self.duration_hours / max_hours) * 100.0
 
     @computed_field
     @property

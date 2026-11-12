@@ -281,7 +281,7 @@ class DashboardUI:
         # Calculate percentage based on 5-hour maximum
         max_hours = 5.0
         duration_hours = session_duration.total_seconds() / 3600
-        percentage = min(100.0, (duration_hours / max_hours) * 100.0)
+        percentage = (duration_hours / max_hours) * 100.0
 
         # Format duration display using hours and minutes format
         duration_display = TimeUtils.format_duration_hm(duration_ms)
@@ -337,7 +337,7 @@ class DashboardUI:
             duration_ms = int(session_duration.total_seconds() * 1000)
             max_hours = 5.0
             duration_hours = session_duration.total_seconds() / 3600
-            percentage = min(100.0, (duration_hours / max_hours) * 100.0)
+            percentage = (duration_hours / max_hours) * 100.0
             duration_display = TimeUtils.format_duration_hm(duration_ms)
             progress_bar = self.create_compact_progress_bar(percentage, 10)
             time_color = self.get_time_color(percentage)
@@ -400,7 +400,7 @@ class DashboardUI:
             duration_ms = int(workflow_duration.total_seconds() * 1000)
             max_hours = 5.0
             duration_hours = workflow_duration.total_seconds() / 3600
-            percentage = min(100.0, (duration_hours / max_hours) * 100.0)
+            percentage = (duration_hours / max_hours) * 100.0
             duration_display = TimeUtils.format_duration_hm(duration_ms)
             progress_bar = self.create_compact_progress_bar(percentage, 10)
             time_color = self.get_time_color(percentage)
@@ -815,13 +815,13 @@ class DashboardUI:
 
     def create_progress_bar(self, percentage: float, width: int = 30) -> str:
         """Create a text-based progress bar."""
-        filled = int(width * percentage / 100)
+        filled = int(width * max(0.0, min(100.0, percentage)) / 100)
         bar = "█" * filled + "░" * (width - filled)
         return f"[{bar}] {percentage:.1f}%"
 
     def create_compact_progress_bar(self, percentage: float, width: int = 20) -> str:
         """Create a compact progress bar for space-efficient display."""
-        filled = int(width * percentage / 100)
+        filled = int(width * max(0.0, min(100.0, percentage)) / 100)
         bar = "█" * filled + "░" * (width - filled)
         return f"{bar} {percentage:.0f}%"
 
@@ -1007,7 +1007,7 @@ class DashboardUI:
         # Calculate percentage based on 5-hour maximum
         max_hours = 5.0
         duration_hours = workflow_duration.total_seconds() / 3600
-        percentage = min(100.0, (duration_hours / max_hours) * 100.0)
+        percentage = (duration_hours / max_hours) * 100.0
 
         # Format duration display
         duration_display = TimeUtils.format_duration_hm(duration_ms)

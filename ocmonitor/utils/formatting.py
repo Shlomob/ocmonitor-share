@@ -147,7 +147,7 @@ class TableFormatter:
         Returns:
             Progress bar string
         """
-        filled = int(width * percentage / 100)
+        filled = int(width * max(0.0, min(100.0, percentage)) / 100)
         bar = filled_char * filled + empty_char * (width - filled)
         return f"[{bar}] {percentage:.1f}%"
 

@@ -176,3 +176,43 @@ class TestSplitProviderModel:
         )
         assert provider == "openrouter"
         assert model == "anthropic/claude-opus"
+
+
+class TestProgressBarClamping:
+    """Out-of-range percentages must not change the bar width (issue: over-quota bar misaligns columns)."""
+
+    def _bar_part(self, rendered: str) -> str:
+        return rendered.split("]")[0].lstrip("[")
+
+    def test_over_100_percent_keeps_width_and_shows_label(self):
+        formatter = TableFormatter()
+        rendered = formatter.create_progress_bar(150.0, width=12)
+        assert self._bar_part(rendered) == "█" * 12
+        assert rendered.endswith("150.0%")
+
+    def test_negative_percent_keeps_width_and_shows_label(self):
+        formatter = TableFormatter()
+        rendered = formatter.create_progress_bar(-10.0, width=12)
+        assert self._bar_part(rendered) == "░" * 12
+        assert rendered.endswith("-10.0%")
+
+    def test_in_range_percent_unchanged(self):
+        formatter = TableFormatter()
+        rendered = formatter.create_progress_bar(50.0, width=12)
+        assert self._bar_part(rendered) == "█" * 6 + "░" * 6
+        assert rendered.endswith("50.0%")
+
+    def test_dashboard_bars_clamp_width(self):
+        from ocmonitor.ui.dashboard import DashboardUI
+
+        dashboard = DashboardUI()
+        assert dashboard.create_progress_bar(250.0, width=10).startswith("[" + "█" * 10 + "]")
+        assert dashboard.create_compact_progress_bar(250.0, width=10).startswith("█" * 10 + " ")
+        assert dashboard.create_compact_progress_bar(-5.0, width=10).startswith("░" * 10 + " ")
+
+    def test_formatting_helper_clamps_width(self):
+        from ocmonitor.utils.formatting import TableFormatter as FormattingTableFormatter
+
+        rendered = FormattingTableFormatter.create_progress_bar(120.0, width=8)
+        assert self._bar_part(rendered) == "█" * 8
+        assert rendered.endswith("120.0%")

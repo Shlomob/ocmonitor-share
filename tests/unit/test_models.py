@@ -1339,3 +1339,25 @@ class TestInteractionDateAttribution:
 
         assert len(filtered) == 1
         assert len(filtered[0].files) == 2
+
+
+def test_duration_percentage_is_not_capped_at_100():
+    """Over-quota sessions report their real percentage of the 5-hour quota."""
+    from ocmonitor.models.session import InteractionFile, SessionData, TimeData
+
+    start_ms = 1_700_000_000_000
+    end_ms = start_ms + int(7.5 * 60 * 60 * 1000)  # 7h30m = 150% of 5h
+    files = [
+        InteractionFile(
+            file_path="/tmp/a.json",
+            session_id="s",
+            time_data=TimeData(created=start_ms, completed=start_ms),
+        ),
+        InteractionFile(
+            file_path="/tmp/b.json",
+            session_id="s",
+            time_data=TimeData(created=end_ms, completed=end_ms),
+        ),
+    ]
+    session = SessionData(session_id="s", files=files)
+    assert session.duration_percentage == 150.0
